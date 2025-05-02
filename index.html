@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+body { 
+  font-family: Arial, sans-serif; 
+  background: #f8f9fa;
+  padding: 20px;
+  text-align: center;
+}
+
+.container {
+  max-width: 700px;
+  margin: auto;
+}
+
+.byte-group {
+  display: flex;
+  justify-content: center;
+  gap: 40px;
+  margin: 30px 0;
+}
+
+.byte {
+  display: grid;
+  grid-template-columns: repeat(8, 30px);
+  gap: 3px;
+  padding: 10px;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.bit {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #ccc;
+  font-weight: bold;
+}
+
+.bit.zero { background: #fff0f5; }
+.bit.one { background: #f0fff0; }
+
+.flag-box {
+  display: flex;
+  justify-content: center;
+  gap: 20px;
+  margin: 20px 0;
+}
+
+.flag {
+  padding: 5px 10px;
+  background: #e9ecef;
+  border-radius: 5px;
+  font-weight: bold;
+}
+
+.step-info {
+  margin: 15px 0;
+  font-size: 16px;
+  color: #333;
+}
+
+.controls {
+  margin: 20px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: center;
+}
+
+input[type="text"],
+input[type="number"] {
+  padding: 5px 10px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  width: 150px;
+}
+
+button {
+  padding: 8px 16px;
+  background: #4a90e2;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  margin: 5px;
+}
+</style>
+</head>
+<body>
+<h2>16-Bit Rotation Visualizer</h2>
+<div class="container">
+  <div class="step-info">Original Value: <span id="original">0x0000</span></div>
+  
+  <div class="byte-group">
+    <div>
+      <div>High Byte</div>
+      <div class="byte" id="highByte"></div>
+    </div>
+    <div>
+      <div>Low Byte</div>
+      <div class="byte" id="lowByte"></div>
+    </div>
+  </div>
+
+  <div class="flag-box">
+    <div class="flag">Carry: <span id="carry">0</span></div>
+    <div class="flag">T Flag: <span id="tflag">0</span></div>
+  </div>
+
+  <div class="step-info" id="stepInfo">Ready</div>
+
+  <div class="controls">
+    <div>
+      <input type="text" id="inputValue" value="0x0003" placeholder="Hex value (e.g. 0x0003)">
+      <input type="number" id="rotationCount" value="2" min="1" max="16" style="width: 60px;">
+    </div>
+    <button onclick="startAnimation()">Start Rotation</button>
+  </div>
+</div>
+
+<script>
+// Create bit elements
+const highByteEl = document.getElementById('highByte');
+const lowByteEl = document.getElementById('lowByte');
+const carryEl = document.getElementById('carry');
+const tflagEl = document.getElementById('tflag');
+const originalVal = document.getElementById('original');
+const stepInfo = document.getElementById('stepInfo');
+
+// Create bit elements for both bytes
+const bitElements = {
+  high: [],
+  low: []
+};
+
+for(let i = 0; i < 8; i++) {
+  const highBit = document.createElement('div');
+  highBit.className = 'bit zero';
+  highByteEl.appendChild(highBit);
+  bitElements.high.push(highBit);
+  
+  const lowBit = document.createElement('div');
+  lowBit.className = 'bit zero';
+  lowByteEl.appendChild(lowBit);
+  bitElements.low.push(lowBit);
+}
+
+function getBits(value) {
+  const bits = [];
+  for(let i = 0; i < 8; i++) {
+    bits.unshift((value >> i) & 1);
+  }
+  return bits;
+}
+
+function updateUI(state) {
+  // Update high byte
+  const highBits = getBits(state.high);
+  bitElements.high.forEach((el, i) => {
+    el.className = `bit ${highBits[i] ? 'one' : 'zero'}`;
+    el.textContent = highBits[i];
+  });
+
+  // Update low byte
+  const lowBits = getBits(state.low);
+  bitElements.low.forEach((el, i) => {
+    el.className = `bit ${lowBits[i] ? 'one' : 'zero'}`;
+    el.textContent = lowBits[i];
+  });
+
+  // Update flags
+  carryEl.textContent = state.carry;
+  tflagEl.textContent = state.tFlag;
+}
+
+async function startAnimation() {
+  const input = document.getElementById('inputValue').value;
+  const rotationCount = parseInt(document.getElementById('rotationCount').value);
+  const value = parseInt(input, 16);
+  
+  if (isNaN(value)) {
+    stepInfo.textContent = "Please enter a valid hex value";
+    return;
+  }
+  
+  // Initialize state
+  let state = {
+    high: (value >> 8) & 0xFF,
+    low: value & 0xFF,
+    carry: 0,
+    tFlag: 0
+  };
+  
+  originalVal.textContent = input;
+  updateUI(state);
+  stepInfo.textContent = "Starting rotation...";
+  await delay(1000);
+  
+  for (let r = 0; r < rotationCount; r++) {
+    stepInfo.textContent = `Rotation ${r+1} of ${rotationCount}`;
+    await delay(1000);
+    
+    // Step 1: ROL Low Byte
+    stepInfo.textContent = "1. Rotating Low Byte (ROL @0)";
+    await delay(1000);
+    
+    const lowMSB = (state.low >> 7) & 1;
+    const oldCarry = state.carry;
+    
+    // ROL operation: shift left, old carry becomes LSB
+    state.low = ((state.low << 1) | oldCarry) & 0xFF;
+    state.carry = lowMSB;
+    
+    updateUI(state);
+    await delay(1000);
+
+    // Step 2: BST High MSB to T
+    stepInfo.textContent = "2. Saving High MSB to T (BST @1, 7)";
+    await delay(1000);
+    
+    state.tFlag = (state.high >> 7) & 1;
+    updateUI(state);
+    await delay(1000);
+
+    // Step 3: ROL High Byte
+    stepInfo.textContent = "3. Rotating High Byte (ROL @1)";
+    await delay(1000);
+    
+    const highMSB = (state.high >> 7) & 1;
+    
+    // ROL operation: shift left, use the carry from ROL Low
+    state.high = ((state.high << 1) | state.carry) & 0xFF;
+    state.carry = highMSB;
+    
+    updateUI(state);
+    await delay(1000);
+
+    // Step 4: BLD Low LSB from T
+    stepInfo.textContent = "4. Setting Low LSB from T (BLD @0, 0)";
+    await delay(1000);
+    
+    // Set LSB to T flag value
+    state.low = (state.low & 0xFE) | state.tFlag;
+    updateUI(state);
+    await delay(1000);
+  }
+  
+  stepInfo.textContent = "Rotation complete!";
+}
+
+function delay(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+</script>
+</body>
+</html>
